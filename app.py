@@ -1,29 +1,37 @@
-from flask import Flask, render_template, url_for, request, flash, redirect, session, abort, g
+from flask import Flask, render_template, url_for, request, flash, redirect, session, abort, g, session, make_response
+from FDataBase import FDataBase
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, login_user, login_required, logout_user, current_user
+from UserLogin import UserLogin
 from flask_debugtoolbar import DebugToolbarExtension
 import sqlite3
 import os
 
 DATABASE = '/tmp/flask.db'
 DEBUG = True
-SECRET_KEY = '1818'
+# SECRET_KEY = '1818'
 
 app = Flask(__name__)
 app.debug = True
 app.config.from_object(__name__)
 
-app.config['SECRET_KEY'] = '1818'
+app.config['SECRET_KEY'] = '7dbd6ea695f5e436182995f0091fbff94816b0b3'
+MAX_CONTENT_LENGTH = 1024 * 1024
 
 app.config.update(DATABASE=os.path.join(app.root_path, 'flask.db'))
 
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+login_manager.login_message = 'Авторизуйтксь для доступа к закрытым страницам'
+login_manager.login_message_category = 'success'
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return UserLogin().fromDB(user_id, dbase)
+
+
 # toolbar = DebugToolbarExtension(app)
-
-
-menu = [{"name": "Приложение", "url": "first-app"},
-        {"name": "Регистрация", "url": "contact"},
-        {"name": "Авторизация", "url": "login"},
-        {"name": "Обратная связь", "url": "contact"},
-        ]
-
 
 def connect_db():
     conn = sqlite3.connect(app.config['DATABASE'])
@@ -45,11 +53,14 @@ def get_db():
     return g.link_db
 
 
-@app.route('/')
-@app.route('/index')
-def index():
+dbase = None
+
+
+@app.before_request
+def before_request():
+    global dbase
     db = get_db()
-    return render_template('index.html', menu=[])
+    dbase = FDataBase(db)
 
 
 @app.teardown_appcontext
@@ -58,41 +69,109 @@ def close_db(error):
         g.link_db.close()
 
 
-def main_page():  # put application's code here
-    return render_template('index.html', title="Про Flask", menu=menu)
+@app.route('/')
+@app.route('/index')
+def index():
+    return render_template('index.html', menu=dbase.getMenu(), posts=dbase.getPostsAnonce())
 
 
-@app.route('/about')
-def about():
-    return render_template('about.html', title="О сайте", menu=menu)
-
-
-@app.route('/contact', methods=["POST", "GET"])
-def contact():
+@app.route('/add_post', methods=['POST', 'GET'])
+def addPost():
     if request.method == 'POST':
-        if len(request.form['username']) > 2:
-            flash('Message sended', category='success')
+        if len(request.form['name']) > 4 and len(request.form['post']) > 4:
+            res = dbase.addPost(request.form['name'], request.form['post'], request.form['url'])
+            if not res:
+                flash('Ошибка добавления статьи', category='error')
+            else:
+                flash('Статья добавлена успешно', category='success')
         else:
-            flash('Error', category='error')
-    return render_template('contact.html', title="Обратная связь", menu=menu)
+            flash('Ошибка добавления статьи', catagory='error')
+    return render_template('add_post.html', menu=dbase.getMenu(), title='Добавление статьи')
 
 
-@app.route('/profile/<username>')
-def profile(username):
-    if 'userLogged' not in session or session['userLogged'] != username:
-        abort(401)
-    return f'Profile user: {username}'
+@app.route('/post/<alias>')
+@login_required
+def showPost(alias):
+    title, post = dbase.getPost(alias)
+    if not title:
+        abort(404)
+
+    return render_template('add_post.html', menu=dbase.getMenu(), title=title, post=post)
 
 
 @app.route('/login', methods=['POST', 'GET'])
 def login():
-    if 'userLogged' in session:
-        return redirect(url_for('profile', username=session['userLogged']))
-    elif request.method == 'POST' and request.form['username'] == 'admin' and request.form['psw'] == 'admin':
-        session['userLogged'] = request.form['username']
-        return redirect(url_for('profile', username=session['userLogged']))
+    if current_user.is_authenticated:
+        return redirect(url_for('profile'))
+    if request.method == 'POST':
+        user = dbase.getUserByEmail(request.form['email'])
+        if user and check_password_hash(user['psw'], request.form['psw']):
+            userlogin = UserLogin().create(user)
+            rm = True if request.form.get('remainme') else False
+            login_user(userlogin, remember=rm)
+            return redirect(request.args.get('next') or url_for('profile'))
 
-    return render_template('login.html', title='Авторизация', menu=menu)
+        flash('Неверная пара логин/пароль', 'error')
+
+    return render_template('login.html', menu=dbase.getMenu(), title="Авторизация")
+
+
+@app.route('/register', methods=['POST', 'GET'])
+def register():
+    if request.method == 'POST':
+        if len(request.form['name']) > 2 and len(request.form['email']) > 2 and len(request.form['psw']) > 2 and \
+                request.form['psw'] == request.form['psw2']:
+            hash = generate_password_hash(request.form['psw'])
+            res = dbase.addUser(request.form['name'], request.form['email'], hash)
+            if res:
+                flash("Вы успешно зарегистрированы", 'succes')
+                return redirect(url_for('login'))
+            else:
+                flash('Ошибка при добавлении в БД', 'error')
+        else:
+            flash('Неверно заполнены поля', 'error')
+
+    return render_template('register.html', menu=dbase.getMenu(), title="Регистрация")
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    flash("Вы вышли из аккаунта", "success")
+    return redirect(url_for('login'))
+
+
+@app.route('/about')
+def about():
+    return render_template('about.html', title="О сайте", menu=dbase.getMenu())
+
+
+# @app.route('/contact', methods=["POST", "GET"])
+# def contact():
+#     if request.method == 'POST':
+#         if len(request.form['username']) > 2:
+#             flash('Message sended', category='success')
+#         else:
+#             flash('Error', category='error')
+#     return render_template('contact.html', title="Обратная связь", menu=menu)
+
+
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html', menu=dbase.getMenu(), title='Профиль')
+
+@app.route('/userava')
+@login_required
+def userava():
+    img = current_user.getAvatar(app)
+    if not img:
+        return ""
+
+    h = make_response(img)
+    h.headers['Content-Type'] = 'image/png'
+    return h
 
 
 @app.errorhandler(404)
