@@ -9,6 +9,7 @@ menu = [{'url': '.index', 'title': 'Панель'},
         {'url': '.listpubs', 'title': 'Список статей'},
         {'url': '.logout', 'title': 'Выйти'}]
 
+
 def isLogged():
     return True if session.get('admin_logged') else False
 
