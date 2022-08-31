@@ -43,6 +43,12 @@ app = Flask(__name__)
 
 # @app.route('/')
 # def index():
+#     info =[]
+#     try:
+#         info = Users.query.all()
+#     except:
+#         print('Ошибка чтения из БД')
+#
 #     return render_template('index_1.html', title='Главная')
 
 # @app.route('/register', methods=('POST', 'GET'))
