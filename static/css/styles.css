@@ -1,0 +1,139 @@
+* {
+    margin: 0;
+    padding: 0;
+}
+
+
+html, body {
+    height: 100%;
+    /*margin: 0;
+    padding: 0;*/
+    front-family: Arial, Tahoma;
+    color: #444;
+    /*background: #fff; url('../images/flask-framework-img.jpg')*/
+}
+
+.mainmenu {
+    list-style: none;
+    margin: 0;
+    padding: 10px 10px;
+    margin-top: 30px;
+    font-family: 'Montserrat', sans-serif;
+    display: flex;
+    flex-wrap: wrap;
+    /*justify-content: center;*/
+    background: #fff;
+}
+
+ul {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+}
+
+ui li {
+    width: auto;
+    display: inline-block;
+}
+
+
+h1 {
+    font-size: 20px;
+    margin: 0 0 20px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ccc;
+}
+
+
+ul.mainmenu li a:hover {
+    color: #FDA83D;
+}
+
+div.content {
+    margin: 10px;
+}
+
+.form-contact label {
+    display: inline-block;
+    min-width: 80px;
+}
+
+.form-contact p {
+    margin: 10px 0 10px 0;
+}
+
+.form-contact input[type=submit], textarea {
+    font-size: 16px;
+}
+
+.flash {
+    padding: 10px;
+}
+
+.flash.success {
+    border: 1px solid #21DB56;
+    background: #AEFFC5;
+}
+
+.flash.error {
+    border: 1px solid #FF4343;
+    background: #FF9C9C;
+}
+
+ul.list-posts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-width: 600px;
+}
+
+ul.list-posts li {
+    margin: 20px 0 0 0;
+    border: 1px solid #eee;
+}
+
+ul.list-posts .title {
+    margin: 0;
+    padding: 5px;
+    background: #eee;
+}
+
+ul.list-posts .anonce {
+    margin: 0;
+    padding: 10px 5px 10px 5px;
+}
+
+.profile-ava {
+    width: 130px;
+    text-align: center;
+    overflow: hidden;
+    background: #eee;
+    padding: 10px;
+}
+.profile-ava img {max-width: 150px; height: auto}
+
+.profile-load {
+    margin-top: 10px;
+    overflow: hidden;
+    max-width: 150px;
+}
+
+.profile-load inputp[type=submit], input[type=file]{
+    width: 100%;
+    front-size: 18px;
+}
+
+.profile-load p {
+    padding: 0;
+    margin: 5px 0 0 0;
+}
+
+.profile-panel {padding: 0 0 0 10px}
+ul.profile-info {
+    list-style: none;
+    margin: 10px 0 0 0;
+    padding: 0;
+    color: #7E652F;
+}
+
+ul.profile-info li {margin: 10px;}
