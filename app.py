@@ -1,3 +1,5 @@
+from datetime import datetime
+from flask_sqlalchemy import SQLAlchemy, Model
 from flask import Flask, render_template, url_for, request, flash, redirect, session, abort, g, session, make_response
 from FDataBase import FDataBase
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -6,12 +8,63 @@ from UserLogin import UserLogin
 from flask_debugtoolbar import DebugToolbarExtension
 import sqlite3
 import os
+from forms import LoginForm, RegisterForm
+from admin.admin import admin
 
 DATABASE = '/tmp/flask.db'
 DEBUG = True
 # SECRET_KEY = '1818'
 
 app = Flask(__name__)
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqllite://flask.db TODO или _URL + #  postgresql://user:password@localhost/database
+
+# app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# db = SQLAlchemy(app)
+
+# class Users(db.Model):
+#     id = db.Column(db.Integer, primary_key=True)
+#     email = db.Column(db.String(50), unique=True)
+#     psw = db.Column(db.String(500), nullable=True)
+#     date = db.Column(db.DateTime, default=datetime.utcnow)
+#
+#     def __repr__(self):
+#         return f"<users {self.id}>"
+#
+# class Profiles(db.Model):
+#     id = db.Column(db.Integer, primary_key=True)
+#     name = db.Column(db.String(50), nullable=True)
+#     old = db.Column(db.Integer)
+#     city = db.Column(db.String(100))
+#
+#     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+#
+#     def __repr__(self):
+#         return f"<profiles {self.id}>"
+
+# @app.route('/')
+# def index():
+#     return render_template('index_1.html', title='Главная')
+
+# @app.route('/register', methods=('POST', 'GET'))
+# def register():
+#     if request == 'POST':
+#       проверка корретности введенных данных
+#         try:
+#             hash = generate_password_hash(request.form['psw'])
+#             u = Users(email=request.form['email'], psw=hash)
+#             db.session.add(u)
+#             db.session.flush()
+#             p = Profiles(name=request.form['name'], old=request.form['old'],
+#             city=request.form['city'], user_id=u.id)
+#             db.session.add(u)
+#             db.session.commit()
+#
+#           except:
+#             db.session.rollback()
+#             print('Ошибка добавления в БД')
+#     return render_template('register.html', title='Регистрация')
+
+
 app.debug = True
 app.config.from_object(__name__)
 
@@ -19,10 +72,11 @@ app.config['SECRET_KEY'] = '7dbd6ea695f5e436182995f0091fbff94816b0b3'
 MAX_CONTENT_LENGTH = 1024 * 1024
 
 app.config.update(DATABASE=os.path.join(app.root_path, 'flask.db'))
+app.register_blueprint(admin, url_prefix='/admin')
 
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
-login_manager.login_message = 'Авторизуйтксь для доступа к закрытым страницам'
+login_manager.login_message = 'Авторизуйтесь для доступа к закрытым страницам'
 login_manager.login_message_category = 'success'
 
 
@@ -103,35 +157,34 @@ def showPost(alias):
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('profile'))
-    if request.method == 'POST':
-        user = dbase.getUserByEmail(request.form['email'])
-        if user and check_password_hash(user['psw'], request.form['psw']):
+
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = dbase.getUserByEmail(form.email.data)
+        if user and check_password_hash(user['psw'], form.psw.data):
             userlogin = UserLogin().create(user)
-            rm = True if request.form.get('remainme') else False
+            rm = form.remember.data
             login_user(userlogin, remember=rm)
             return redirect(request.args.get('next') or url_for('profile'))
 
         flash('Неверная пара логин/пароль', 'error')
 
-    return render_template('login.html', menu=dbase.getMenu(), title="Авторизация")
+    return render_template('login.html', menu=dbase.getMenu(), title='Авторизация', form=form)
 
 
 @app.route('/register', methods=['POST', 'GET'])
 def register():
-    if request.method == 'POST':
-        if len(request.form['name']) > 2 and len(request.form['email']) > 2 and len(request.form['psw']) > 2 and \
-                request.form['psw'] == request.form['psw2']:
-            hash = generate_password_hash(request.form['psw'])
-            res = dbase.addUser(request.form['name'], request.form['email'], hash)
-            if res:
-                flash("Вы успешно зарегистрированы", 'succes')
-                return redirect(url_for('login'))
-            else:
-                flash('Ошибка при добавлении в БД', 'error')
+    form = RegisterForm()
+    if form.validate_on_submit():
+        hash = generate_password_hash(form.psw.data)
+        res = dbase.addUser(form.name.data, form.email.data, hash)
+        if res:
+            flash("Вы успешно зарегистрированы", 'succes')
+            return redirect(url_for('login'))
         else:
-            flash('Неверно заполнены поля', 'error')
+            flash('Ошибка при добавлении в БД', 'error')
 
-    return render_template('register.html', menu=dbase.getMenu(), title="Регистрация")
+    return render_template('register.html', menu=dbase.getMenu(), title="Регистрация", form=form)
 
 
 @app.route('/logout')
@@ -162,6 +215,7 @@ def about():
 def profile():
     return render_template('profile.html', menu=dbase.getMenu(), title='Профиль')
 
+
 @app.route('/userava')
 @login_required
 def userava():
@@ -174,9 +228,29 @@ def userava():
     return h
 
 
+@app.route('/upload', methods=['POST', 'GET'])
+@login_required
+def upload():
+    if request.method == 'POST':
+        file = request.files['file']
+        if file and current_user.verifyExt(file.filename):
+            try:
+                img = file.read()
+                res = dbase.updateUserAvatar(img, current_user.get_id())
+                if not res:
+                    flash('Ошибка обновления аватара', 'error')
+                flash('Аватар обновлен', 'success')
+            except FileNotFoundError as e:
+                flash('Ошибка чтения файла', 'error')
+    else:
+        flash('Ошибка обновления аватара', 'error')
+
+    return redirect(url_for('profile'))
+
+
 @app.errorhandler(404)
 def pageNotFount(error):
-    return render_template('page404.html', title="Страница не найдена", menu=menu), 404
+    return render_template('page404.html', title="СТРАНИЦА НЕ НАЙДЕНА", menu=dbase.getMenu()), 404
 
 
 if __name__ == '__main__':
